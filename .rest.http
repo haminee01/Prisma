@@ -1,0 +1,30 @@
+### 사용자 생성성
+POST http://localhost:4000/users
+Content-Type: application/json
+
+{
+    "nickname": "Doe",
+    "email": "dfjnfi@example.com",
+    "password": "1234"
+}
+
+### 사용자 정보 수정
+PUT http://localhost:4000/users/:1
+Content-Type: application/json
+
+{
+  "password": "1234",          // 기존 비밀번호 확인용
+  "newPassword": "5678",       // 변경할 비밀번호 (없으면 비밀번호 유지)
+  "email": "dfjnfi@example.com",
+  "nickname": "Doe"
+}
+
+### 게시글 생성 
+POST http://localhost:4000
+Content-Type: application/json
+
+{
+  "title": "Your Post Title",
+  "content": "This is the content of the post.",
+  "userId": "1"
+}
