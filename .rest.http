@@ -1,4 +1,4 @@
-@jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjQsImlhdCI6MTc0OTg5NzU3NCwiZXhwIjoxNzQ5OTQwNzc0fQ.TWuwvrYGrCWCGHHhUe_PHStEWjYVrTzjvLuTIBWk2U4"
+@jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjQsImlhdCI6MTc1MDA0OTMwMCwiZXhwIjoxNzUwMDkyNTAwfQ.02q5ywhQyvfK-BB6EFXKSb-Emgyg-GsXNNDbvr00xbk"
 
 ### 회원가입
 POST http://localhost:4000/sign-up
@@ -38,7 +38,7 @@ Authorization: Bearer {{jwt}}
 }
 
 ### 게시글 수정
-PUT http://localhost:4000/posts/2
+PUT http://localhost:4000/posts/3
 Content-Type: application/json
 Authorization: Bearer {{jwt}}
 
@@ -48,6 +48,6 @@ Authorization: Bearer {{jwt}}
 }
 
 ### 게시글 삭제
-DELETE http://localhost:4000/posts/2
+DELETE http://localhost:4000/posts/3
 Content-Type: application/json
 Authorization: Bearer {{jwt}}
