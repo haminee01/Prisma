@@ -1,163 +1,105 @@
-import express from "express";
-import { prisma } from "../utils/prisma/index.js";
-
+const express = require("express");
 const router = express.Router();
+const authenticateToken = require("../middleware/authenticate-middleware");
+const jwt = require("jsonwebtoken");
+const SECRET_KEY = "sessac";
+const prisma = require("../utils/prisma/index.js");
+const bcrypt = require("bcrypt");
+const {
+  signUpValidator,
+  handleValidationResult,
+  loginValidator,
+} = require("../middleware/validation-result-handler.js");
 
-// 사용자 생성 API
-router.post("/users", async (req, res, next) => {
-  try {
+// 1. 이메일, 비밀번호, 닉네임 입력이 정확하게 왔는지 검증
+// 2. 비밀번호 6글자 이상 조건
+// 3. 이메일이 중복이 있는지 확인
+// 4. 데이터베이스에 저장
+
+router.post(
+  "/sign-up",
+  signUpValidator,
+  loginValidator,
+  handleValidationResult,
+
+  async (req, res, next) => {
     const { email, password, nickname } = req.body;
-    // 이메일 중복 확인
-    const existingUser = await prisma.users.findUnique({
+    // 3.
+    try {
+      const user = await prisma.users.findFirst({
+        where: { email },
+      });
+      if (user) {
+        return next(new Error("ExistEmail"));
+      }
+
+      const saltRounds = 10;
+      const salt = await bcrypt.genSalt(saltRounds);
+      const bcryptPassword = await bcrypt.hash(password, salt);
+
+      // 4.
+      const newUser = await prisma.users.create({
+        data: {
+          email,
+          password: bcryptPassword,
+          nickname,
+        },
+      });
+      return res.status(201).json({
+        message: "회원가입이 정상적으로 완료되었습니다.",
+      });
+    } catch (e) {
+      return next(new Error("DataBaseError"));
+    }
+  }
+);
+
+// 로그인 api
+// 1. 이메일, 비밀번호 입력 여부 확인
+// 2. 이메일에 해당하는 사용자 찾기
+// 3. 사용자 존재 여부
+// 4. 비밀번호 일치 여부 확인
+// 5. JWT 토큰 발급
+// 6. 생성된 데이터를 전달
+
+router.post(
+  "/login",
+  loginValidator,
+  handleValidationResult,
+  async (req, res, next) => {
+    const { email, password } = req.body;
+    // 2번까지 완료!
+    const user = await prisma.users.findFirst({
       where: { email },
     });
-    if (existingUser) {
-      return res.status(409).json({ message: "이미 존재하는 이메일입니다." });
-    }
-    // 새 사용자 생성
-    const newUser = await prisma.users.create({
-      data: {
-        email,
-        password, // 실제 서비스에서는 비밀번호를 해싱해야 합니다.
-        nickname,
-      },
-    });
-
-    // 비밀번호는 응답에서 제외
-    const { password: _, ...userData } = newUser;
-
-    return res
-      .status(201)
-      .json({ message: "회원가입이 완료되었습니다.", data: userData });
-  } catch (error) {
-    next(error); // 에러 미들웨어로 전달
-  }
-});
-
-// 모든 사용자 조회 API (간단한 예시)
-router.get("/users", async (req, res, next) => {
-  try {
-    const users = await prisma.users.findMany({
-      select: {
-        userId: true,
-        email: true,
-        nickname: true,
-        createdAt: true,
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
-    return res.status(200).json({ data: users });
-  } catch (error) {
-    next(error);
-  }
-});
-
-// 특정 사용자 조회 API (관련된 게시글 포함)
-router.get("/users/:userId", async (req, res, next) => {
-  try {
-    const { userId } = req.params;
-    const user = await prisma.users.findUnique({
-      where: { userId: +userId },
-      include: {
-        Posts: {
-          // User에 연결된 모든 Posts를 함께 조회 (관계 필드 사용)
-          select: {
-            postId: true,
-            title: true,
-            createdAt: true,
-          },
-          orderBy: {
-            createdAt: "desc",
-          },
-        },
-      },
-    });
-
     if (!user) {
-      return res.status(404).json({ message: "사용자를 찾을 수 없습니다." });
+      // 유저 없는 경우
+      return next(new Error("UserNotFound"));
     }
-
-    const { password: _, ...userData } = user;
-    return res.status(200).json({ data: userData });
-  } catch (error) {
-    next(error);
-  }
-});
-
-// 사용자 정보 수정 API (비밀번호 확인 필요)
-router.put("/users/:userId", async (req, res, next) => {
-  try {
-    const { userId } = req.params;
-    const { email, password, newPassword, nickname } = req.body;
-
-    const user = await prisma.users.findUnique({
-      where: { userId: +userId },
-    });
-
-    if (!user) {
-      return res.status(404).json({ message: "사용자를 찾을 수 없습니다." });
+    // 사용자가 있음
+    const verifyPassword = await bcrypt.compare(password, user.password);
+    if (!verifyPassword) {
+      return next(new Error("PasswordError"));
     }
-
-    // 비밀번호 확인 (실제 환경에서는 해싱된 비밀번호 비교)
-    if (user.password !== password) {
-      return res.status(401).json({ message: "비밀번호가 일치하지 않습니다." });
-    }
-
-    await prisma.users.update({
-      where: { userId: +userId },
-      data: {
-        email: email || user.email, // 변경할 값이 없으면 기존 값 유지
-        password: newPassword || user.password, // 새 비밀번호가 없으면 기존 비밀번호 유지
-        nickname: nickname || user.nickname,
-        updatedAt: new Date(), // 수동으로 업데이트 시간 설정
+    const token = jwt.sign(
+      {
+        userId: user.userId,
       },
+      SECRET_KEY,
+      {
+        expiresIn: "12h",
+      }
+    );
+    return res.status(200).send({
+      message: "정상적으로 완료",
+      token,
     });
-
-    return res
-      .status(200)
-      .json({ message: "사용자 정보가 성공적으로 수정되었습니다." });
-  } catch (error) {
-    next(error);
   }
+);
+
+router.get("/user", authenticateToken, (req, res, next) => {
+  console.log(req.user);
+  //next(new Error("ExistEmail"));
 });
 
-// 사용자 삭제 API (비밀번호 확인 필요)
-router.delete("/users/:userId", async (req, res, next) => {
-  try {
-    const { userId } = req.params;
-    const { password } = req.body;
-
-    const user = await prisma.users.findUnique({
-      where: { userId: +userId },
-    });
-
-    if (!user) {
-      return res.status(404).json({ message: "사용자를 찾을 수 없습니다." });
-    }
-
-    // 비밀번호 확인
-    if (user.password !== password) {
-      return res.status(401).json({ message: "비밀번호가 일치하지 않습니다." });
-    }
-
-    // 사용자와 관련된 모든 게시글도 함께 삭제
-    // (Prisma 스키마에 `onDelete: Cascade`를 설정하면 DB 단에서 자동으로 처리 가능)
-    // await prisma.post.deleteMany({
-    //   where: { userId: +userId },
-    // });
-
-    await prisma.users.delete({
-      where: { userId: +userId },
-    });
-
-    return res
-      .status(200)
-      .json({ message: "사용자가 성공적으로 삭제되었습니다." });
-  } catch (error) {
-    next(error);
-  }
-});
-
-export default router;
+module.exports = router;

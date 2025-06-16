@@ -1,128 +1,82 @@
-import express from "express";
-import { PrismaClient } from "@prisma/client";
-
+const express = require("express");
 const router = express.Router();
-const prisma = new PrismaClient();
+const prisma = require("../utils/prisma/index.js");
+const authenticateToken = require("../middleware/authenticate-middleware.js");
 
-// 전체 게시글 조회
-router.get("/", async (req, res) => {
-  try {
-    const posts = await prisma.post.findMany({
-      select: {
-        postId: true,
-        title: true,
-        content: true,
-        userId: true,
+// 전체 게시글 조회 (누구나 조회 가능 / 작성자 정보도 같이 보냄)
+router.get("/posts", authenticateToken, async (req, res, next) => {
+  const posts = await prisma.post.findMany({
+    include: {
+      User: {
+        select: {
+          userId: true,
+          nickname: true,
+        },
       },
-    });
-    res.json(
-      posts.map((p) => ({
-        id: p.postId,
-        title: p.title,
-        content: p.content,
-        userId: p.userId,
-      }))
-    );
-  } catch (error) {
-    res.status(500).json({ error: "Failed to fetch posts" });
-  }
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+  res.send({ data: posts });
 });
 
-// 특정 게시글 조회
-router.get("/:id", async (req, res) => {
-  const id = Number(req.params.id);
-  try {
-    const post = await prisma.post.findUnique({
-      where: { postId: id },
-      select: {
-        postId: true,
-        title: true,
-        content: true,
-        userId: true,
+// 특정 게시글 조회 (누구나 조회 가능)
+router.get("/posts/:postId", async (req, res, next) => {
+  const { postId } = req.params;
+  const post = await prisma.post.findUnique({
+    where: { postId: +postId },
+    include: {
+      User: {
+        select: {
+          userId: true,
+          nickname: true,
+        },
       },
-    });
-    if (!post) return res.status(404).json({ error: "Post not found" });
-
-    res.json({
-      id: post.postId,
-      title: post.title,
-      content: post.content,
-      userId: post.userId,
-    });
-  } catch (error) {
-    res.status(500).json({ error: "Failed to fetch post" });
-  }
+    },
+  });
+  return res.status(200).json({ data: post });
 });
 
-// 게시글 생성
-router.post("/", async (req, res) => {
-  const { title, content, userId } = req.body;
-  if (!title || !content || !userId) {
-    return res.status(400).json({ error: "Missing required fields" });
-  }
-
-  try {
-    const newPost = await prisma.post.create({
-      data: {
-        title,
-        content,
-        userId,
-      },
-    });
-    res.status(201).json({
-      id: newPost.postId,
-      title: newPost.title,
-      content: newPost.content,
-      userId: newPost.userId,
-    });
-  } catch (error) {
-    res.status(500).json({ error: "Failed to create post" });
-  }
-});
-
-// 게시글 수정
-router.put("/:id", async (req, res) => {
-  const id = Number(req.params.id);
+// 게시글 생성 (로그인 된 사람만)
+router.post("/posts", authenticateToken, async (req, res, next) => {
   const { title, content } = req.body;
-
-  try {
-    const updatedPost = await prisma.post.update({
-      where: { postId: id },
-      data: {
-        ...(title !== undefined && { title }),
-        ...(content !== undefined && { content }),
-      },
-    });
-    res.json({
-      id: updatedPost.postId,
-      title: updatedPost.title,
-      content: updatedPost.content,
-      userId: updatedPost.userId,
-    });
-  } catch (error) {
-    if (error.code === "P2025") {
-      // Prisma error: record to update not found
-      return res.status(404).json({ error: "Post not found" });
-    }
-    res.status(500).json({ error: "Failed to update post" });
-  }
+  const userId = req.user;
+  const newPost = await prisma.post.create({
+    data: {
+      userId,
+      title,
+      content,
+    },
+  });
+  return res
+    .status(201)
+    .json({ message: "게시글이 등록되었습니다.", data: newPost });
 });
 
-// 게시글 삭제
-router.delete("/:id", async (req, res) => {
-  const id = Number(req.params.id);
-
-  try {
-    await prisma.post.delete({
-      where: { postId: id },
-    });
-    res.json({ message: "deleted" });
-  } catch (error) {
-    if (error.code === "P2025") {
-      return res.status(404).json({ error: "Post not found" });
-    }
-    res.status(500).json({ error: "Failed to delete post" });
-  }
+// 게시글 수정 (작성자만 가능)
+router.put("/posts/:postId", async (req, res, next) => {
+  const { postId } = req.params;
+  const { title, content } = req.body;
+  const updatePost = await prisma.post.update({
+    where: { postId: +postId },
+    data: {
+      title,
+      content,
+    },
+  });
+  return res
+    .status(200)
+    .json({ message: "게시글이 수정되었습니다.", data: updatePost });
 });
 
-export default router;
+// 게시글 삭제 (작성자만 가능)
+router.delete("/posts/:postId", async (req, res, next) => {
+  const { postId } = req.params;
+  await prisma.post.delete({
+    where: { postId: +postId },
+  });
+  return res.status(200).json({ message: "게시글이 삭제되었습니다." });
+});
+
+module.exports = router;

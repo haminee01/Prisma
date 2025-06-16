@@ -1,30 +1,53 @@
-### 사용자 생성성
-POST http://localhost:4000/users
+@jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjQsImlhdCI6MTc0OTg5NzU3NCwiZXhwIjoxNzQ5OTQwNzc0fQ.TWuwvrYGrCWCGHHhUe_PHStEWjYVrTzjvLuTIBWk2U4"
+
+### 회원가입
+POST http://localhost:4000/sign-up
 Content-Type: application/json
 
 {
-    "nickname": "Doe",
-    "email": "dfjnfi@example.com",
-    "password": "1234"
+    "email": "test1@example.com",
+    "password": "123456789",
+    "nickname": "test1"
 }
 
-### 사용자 정보 수정
-PUT http://localhost:4000/users/:1
+### 로그인 -> 토큰 발급
+POST http://localhost:4000/login
 Content-Type: application/json
 
 {
-  "password": "1234",          // 기존 비밀번호 확인용
-  "newPassword": "5678",       // 변경할 비밀번호 (없으면 비밀번호 유지)
-  "email": "dfjnfi@example.com",
-  "nickname": "Doe"
+    "email": "test1@example.com",
+    "password": "123456789"
 }
 
-### 게시글 생성 
-POST http://localhost:4000
+### 전체 게시글 조회
+GET http://localhost:4000/posts
 Content-Type: application/json
+Authorization: Bearer {{jwt}}
+
+### 특정 게시글 조회
+GET http://localhost:4000/posts/1
+
+### 게시글 생성
+POST http://localhost:4000/posts
+Content-Type: application/json
+Authorization: Bearer {{jwt}}
 
 {
-  "title": "Your Post Title",
-  "content": "This is the content of the post.",
-  "userId": "1"
+  "title": "title2",
+  "content": "This is title2"
 }
+
+### 게시글 수정
+PUT http://localhost:4000/posts/2
+Content-Type: application/json
+Authorization: Bearer {{jwt}}
+
+{
+  "title": "title2",
+  "content": "This is title2-1"
+}
+
+### 게시글 삭제
+DELETE http://localhost:4000/posts/2
+Content-Type: application/json
+Authorization: Bearer {{jwt}}
